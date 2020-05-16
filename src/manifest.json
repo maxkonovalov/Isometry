@@ -1,0 +1,39 @@
+{
+  "name": "Isometry",
+  "description": "Create isometric projections from layers",
+  "icon": "icon.png",
+  "identifier": "com.maxkonovalov.isometry",
+  "author": "Max Konovalov",
+  "version": "1.0",
+  "commands": [
+    {
+      "script": "./plugin.js",
+      "handler": "onCreateTop",
+      "name": "Create Top Isometric Projection",
+      "description": "Generate a top isometric view with selected layers",
+      "identifier": "create-top"
+    },
+    {
+      "script": "./plugin.js",
+      "handler": "onCreateLeft",
+      "name": "Create Left Isometric Projection",
+      "description": "Generate a left isometric view with selected layers",
+      "identifier": "create-left"
+    },
+    {
+      "script": "./plugin.js",
+      "handler": "onCreateFront",
+      "name": "Create Front Isometric Projection",
+      "description": "Generate a front isometric view with selected layers",
+      "identifier": "create-front"
+    }
+  ],
+  "menu": {
+    "title": "Isometry",
+    "items": [
+      "create-top",
+      "create-left",
+      "create-front"
+    ]
+  }
+}
