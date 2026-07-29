@@ -67,6 +67,34 @@ naming its page `ISOMETRY-TEST`, and only tagged documents are ever closed. Each
 also checks that its test document is frontmost before running a command, and aborts if it
 isn't, so the plugin can't be pointed at a document the suite didn't create.
 
+### Sketch caches plugin code
+
+If a rebuild doesn't seem to change anything, this is why. Sketch loads a plugin's
+JavaScript once and keeps using that copy, so a fresh `npm run build` has no effect on what
+the menu commands run until Sketch re-reads it — it's possible to keep looking at a bug
+that's already fixed. Note that `sketchtool run` *does* pick up the current build, so
+`npm test` can pass against a build the menu commands aren't using.
+
+`npm install` runs `skpm-link`, which offers to enable Sketch's "Always Reload Scripts
+Before Running" developer setting — say yes, or set it directly:
+
+```bash
+defaults write com.bohemiancoding.sketch3 AlwaysReloadScript -bool YES   # then restart Sketch
+```
+
+To see which build Sketch actually has loaded, and compare it against `"version"` in
+`src/manifest.json`:
+
+```bash
+/Applications/Sketch.app/Contents/MacOS/sketchtool run-script '
+var pm = AppController.sharedInstance().pluginManager();
+console.log(pm.plugins().objectForKey("com.maxkonovalov.isometry").version())'
+```
+
+Turn the setting off again when you're done iterating — it makes Sketch re-read plugin code
+on every invocation, for every plugin. None of this affects anyone installing a released
+`.zip`; they always get fresh code.
+
 ## License
 
 `Isometry` is available under the MIT license. See the LICENSE file for more info.
