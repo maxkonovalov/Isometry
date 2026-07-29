@@ -9,8 +9,11 @@
 # Usage:  ./test/verify.sh          (uses /Applications/Sketch.app)
 #         SKETCH_APP=/path/to/Sketch.app ./test/verify.sh
 #
-# Sketch will be launched and brought to the front. Any open documents are
-# closed first, so save your work before running this.
+# Your own open documents are left alone. Each fixture creates its own document,
+# tagged by naming its page ISOMETRY-TEST, and only documents carrying that tag
+# are ever closed. Before running a command, each fixture checks that its test
+# document is the frontmost one and aborts if it is not, so the plugin can never
+# be pointed at a document it did not create.
 
 set -uo pipefail
 
@@ -40,28 +43,55 @@ runscript() {
     | perl -pe 's/\\n/\n/g'
 }
 
-runcmd() {
-  "$SKETCHTOOL" run "$BUNDLE" "$1" 2>&1
+runcmd() { "$SKETCHTOOL" run "$BUNDLE" "$1" 2>&1; }
+
+# Runs a fixture and aborts the whole suite unless it reports itself ready,
+# which it only does once its own document is frontmost.
+setup() {
+  local out
+  out="$(runscript "$1")"
+  case "$out" in
+    *ready*) return 0 ;;
+    *) printf "\n\033[31mABORTED\033[0m  fixture %s: %s\n" "$(basename "$1")" "$out"; exit 1 ;;
+  esac
 }
+
+# ------------------------------------------------------- shared JS prelude ---
+
+cat > "$TMP/prelude.js" <<'JS'
+var sketch = require('sketch')
+var TAG = 'ISOMETRY-TEST'
+function closeTestDocuments() {
+  sketch.getDocuments().forEach(function (d) {
+    try {
+      if (d.pages.length && String(d.pages[0].name) === TAG) d.sketchObject.close()
+    } catch (e) {}
+  })
+}
+function newTestDocument() {
+  closeTestDocuments()
+  var doc = new sketch.Document()
+  doc.pages[0].name = TAG
+  return doc
+}
+// Only report ready when our own document is the one the plugin will act on.
+function confirmFrontmost(doc) {
+  var selected = sketch.getSelectedDocument()
+  if (!selected || String(selected.id) !== String(doc.id)) {
+    console.log('ERROR: test document is not frontmost; refusing to run')
+    return false
+  }
+  console.log('ready')
+  return true
+}
+JS
+
+fixture() { cat "$TMP/prelude.js" "$1" > "$TMP/_run.js"; echo "$TMP/_run.js"; }
 
 # ---------------------------------------------------------------- fixtures ---
 
-cat > "$TMP/dump.js" <<'JS'
-var sketch = require('sketch')
-var doc = sketch.getSelectedDocument()
-function walk(layer) {
-  var node = { type: layer.type, rotation: layer.transform.rotation }
-  try { if (layer.getSVGPath) node.path = layer.getSVGPath() } catch (e) {}
-  if (layer.layers) node.layers = layer.layers.map(walk)
-  return node
-}
-console.log(JSON.stringify(doc.pages[0].layers.map(walk)))
-JS
-
-cat > "$TMP/rect.js" <<'JS'
-var sketch = require('sketch')
-sketch.getDocuments().forEach(function (d) { try { d.sketchObject.close() } catch (e) {} })
-var doc = new sketch.Document()
+cat > "$TMP/rect.body.js" <<'JS'
+var doc = newTestDocument()
 var rect = new sketch.ShapePath({
   parent: doc.pages[0],
   frame: { x: 0, y: 0, width: 100, height: 50 },
@@ -69,13 +99,11 @@ var rect = new sketch.ShapePath({
 })
 doc.selectedLayers.clear()
 rect.selected = true
-console.log('ready')
+confirmFrontmost(doc)
 JS
 
-cat > "$TMP/composite.js" <<'JS'
-var sketch = require('sketch')
-sketch.getDocuments().forEach(function (d) { try { d.sketchObject.close() } catch (e) {} })
-var doc = new sketch.Document()
+cat > "$TMP/composite.body.js" <<'JS'
+var doc = newTestDocument()
 var page = doc.pages[0]
 var r1 = new sketch.ShapePath({ frame: { x: 0, y: 0, width: 100, height: 50 }, shapeType: sketch.ShapePath.ShapeType.Rectangle })
 var r2 = new sketch.ShapePath({ frame: { x: 10, y: 10, width: 30, height: 30 }, shapeType: sketch.ShapePath.ShapeType.Oval })
@@ -86,30 +114,93 @@ var outer = new sketch.Group({ parent: page, layers: [inner, text], name: 'outer
 outer.adjustToFit()
 doc.selectedLayers.clear()
 outer.selected = true
-console.log('ready')
+confirmFrontmost(doc)
 JS
 
-cat > "$TMP/image.js" <<'JS'
-var sketch = require('sketch')
-sketch.getDocuments().forEach(function (d) { try { d.sketchObject.close() } catch (e) {} })
-var doc = new sketch.Document()
+cat > "$TMP/image.body.js" <<'JS'
+var doc = newTestDocument()
 var page = doc.pages[0]
 var img = new sketch.Image({ parent: page, image: ICON_PATH, frame: { x: 0, y: 0, width: 60, height: 60 } })
 var rect = new sketch.ShapePath({ parent: page, frame: { x: 100, y: 0, width: 100, height: 50 }, shapeType: sketch.ShapePath.ShapeType.Rectangle })
 doc.selectedLayers.clear()
 img.selected = true
 rect.selected = true
+confirmFrontmost(doc)
+JS
+perl -pi -e "s{ICON_PATH}{'$ROOT/assets/icon.png'}" "$TMP/image.body.js"
+
+cat > "$TMP/artboard.body.js" <<'JS'
+var doc = newTestDocument()
+// The artboard is sized tightly around the rectangle, so the projection — which
+// is always larger than the artwork it came from — is guaranteed to overflow it.
+var board = new sketch.Artboard({
+  parent: doc.pages[0], name: 'Board',
+  frame: { x: 0, y: 0, width: 100, height: 50 },
+})
+var rect = new sketch.ShapePath({
+  parent: board,
+  frame: { x: 0, y: 0, width: 100, height: 50 },
+  shapeType: sketch.ShapePath.ShapeType.Rectangle,
+})
+doc.selectedLayers.clear()
+rect.selected = true
+confirmFrontmost(doc)
+JS
+
+cat > "$TMP/empty.body.js" <<'JS'
+var doc = newTestDocument()
+doc.selectedLayers.clear()
+confirmFrontmost(doc)
+JS
+
+cat > "$TMP/teardown.body.js" <<'JS'
+closeTestDocuments()
 console.log('ready')
 JS
-# inject the icon path without embedding an absolute path in the heredoc
-perl -pi -e "s{ICON_PATH}{'$ROOT/assets/icon.png'}" "$TMP/image.js"
 
-cat > "$TMP/empty.js" <<'JS'
-var sketch = require('sketch')
-sketch.getDocuments().forEach(function (d) { try { d.sketchObject.close() } catch (e) {} })
-var doc = new sketch.Document()
-doc.selectedLayers.clear()
-console.log('ready')
+# ------------------------------------------------------------- inspectors ---
+
+cat > "$TMP/dump.body.js" <<'JS'
+var doc = sketch.getSelectedDocument()
+function walk(layer) {
+  var node = { type: layer.type, rotation: layer.transform.rotation }
+  try { if (layer.getSVGPath) node.path = layer.getSVGPath() } catch (e) {}
+  if (layer.layers) node.layers = layer.layers.map(walk)
+  return node
+}
+console.log(JSON.stringify(doc.pages[0].layers.map(walk)))
+JS
+
+# Reports the artboard's size and whether anything inside it is clipped,
+# measured through accumulated transforms so rotation is accounted for.
+cat > "$TMP/artboard-state.body.js" <<'JS'
+var doc = sketch.getSelectedDocument()
+function rotM(d){var r=d*Math.PI/180,c=Math.cos(r),s=Math.sin(r);return [c,-s,s,c,0,0]}
+function tM(x,y){return [1,0,0,1,x,y]}
+function mul(m,n){return [m[0]*n[0]+m[2]*n[1],m[1]*n[0]+m[3]*n[1],m[0]*n[2]+m[2]*n[3],
+  m[1]*n[2]+m[3]*n[3],m[0]*n[4]+m[2]*n[5]+m[4],m[1]*n[4]+m[3]*n[5]+m[5]]}
+function ap(m,p){return [m[0]*p[0]+m[2]*p[1]+m[4],m[1]*p[0]+m[3]*p[1]+m[5]]}
+function l2p(l){var f=l.frame
+  return mul(tM(f.x+f.width/2,f.y+f.height/2),mul(rotM(l.transform.rotation||0),tM(-f.width/2,-f.height/2)))}
+var board = doc.pages[0].layers.filter(function (l) { return l.type === 'Artboard' })[0]
+if (!board) { console.log(JSON.stringify({ error: 'no artboard' })) } else {
+  var b = { x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9 }
+  ;(function walk(l, M) {
+    var L = mul(M, l2p(l))
+    if (l.layers && l.layers.length) { l.layers.forEach(function (c) { walk(c, L) }); return }
+    var f = l.frame
+    ;[[0,0],[f.width,0],[f.width,f.height],[0,f.height]].forEach(function (p) {
+      var q = ap(L, p)
+      b.x0 = Math.min(b.x0, q[0]); b.y0 = Math.min(b.y0, q[1])
+      b.x1 = Math.max(b.x1, q[0]); b.y1 = Math.max(b.y1, q[1])
+    })
+  })({ layers: board.layers, frame: { x: 0, y: 0, width: 0, height: 0 }, transform: { rotation: 0 } }, [1,0,0,1,0,0])
+  console.log(JSON.stringify({
+    width: board.frame.width, height: board.frame.height,
+    clipped: b.x0 < -0.5 || b.y0 < -0.5 ||
+             b.x1 > board.frame.width + 0.5 || b.y1 > board.frame.height + 0.5,
+  }))
+}
 JS
 
 # ------------------------------------------------------------- geometry ------
@@ -163,12 +254,11 @@ JS
 
 info "Geometry — a 100x50 rectangle projected onto each face"
 for face in top left front; do
-  runscript "$TMP/rect.js" >/dev/null
+  setup "$(fixture "$TMP/rect.body.js")"
   err="$(runcmd "create-$face")"
   if [ -n "$err" ]; then bad "$face: plugin reported: $err"; continue; fi
 
-  json="$(runscript "$TMP/dump.js")"
-  path="$(printf '%s' "$json" | node -e '
+  path="$(runscript "$(fixture "$TMP/dump.body.js")" | node -e '
     let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
       const layers = JSON.parse(s.trim());
       const shape = layers.find(l => l.path);
@@ -178,20 +268,20 @@ for face in top left front; do
     })')"
 
   case "$path" in
-    "")      bad "$face: no path geometry in result" ;;
-    ROT:*)   bad "$face: rotation not baked into geometry (${path#ROT:} deg)" ;;
-    *)       result="$(node "$TMP/check.js" "$face" "$path")"
-             [ "$result" = "OK" ] && ok "$face" || bad "$face: $result" ;;
+    "")    bad "$face: no path geometry in result" ;;
+    ROT:*) bad "$face: rotation not baked into geometry (${path#ROT:} deg)" ;;
+    *)     result="$(node "$TMP/check.js" "$face" "$path")"
+           [ "$result" = "OK" ] && ok "$face" || bad "$face: $result" ;;
   esac
 done
 
 info "Composite — nested groups, a bezier oval and a text layer"
-runscript "$TMP/composite.js" >/dev/null
+setup "$(fixture "$TMP/composite.body.js")"
 err="$(runcmd create-left)"
 if [ -n "$err" ]; then
   bad "composite: plugin reported: $err"
 else
-  summary="$(runscript "$TMP/dump.js" | node -e '
+  read -r paths rotated text <<<"$(runscript "$(fixture "$TMP/dump.body.js")" | node -e '
     let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
       const layers = JSON.parse(s.trim());
       let paths = 0, rotated = 0, text = 0;
@@ -201,32 +291,51 @@ else
         if (Math.abs(n.rotation) > 1e-6) rotated++;
         if (n.layers) walk(n.layers);
       })})(layers);
-      console.log(JSON.stringify({ paths, rotated, text }));
+      console.log(paths, rotated, text);
     })')"
-  read -r paths rotated text <<<"$(printf '%s' "$summary" | node -e '
-    let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{const o=JSON.parse(s);console.log(o.paths,o.rotated,o.text)})')"
-  [ "$paths" -ge 3 ]  && ok "composite: $paths paths produced"      || bad "composite: only $paths paths"
-  [ "$rotated" -eq 0 ] && ok "composite: all rotations baked to 0"  || bad "composite: $rotated layers still rotated"
-  [ "$text" -eq 0 ]    && ok "composite: text converted to outlines" || bad "composite: $text text layers survived"
+  [ "${paths:-0}" -ge 3 ]   && ok "composite: $paths paths produced"       || bad "composite: only ${paths:-0} paths"
+  [ "${rotated:-1}" -eq 0 ] && ok "composite: all rotations baked to 0"    || bad "composite: $rotated layers still rotated"
+  [ "${text:-1}" -eq 0 ]    && ok "composite: text converted to outlines"  || bad "composite: $text text layers survived"
+fi
+
+info "Artboard — projection must not be clipped by the enclosing artboard"
+setup "$(fixture "$TMP/artboard.body.js")"
+before="$(runscript "$(fixture "$TMP/artboard-state.body.js")")"
+err="$(runcmd create-top)"
+if [ -n "$err" ]; then
+  bad "artboard: plugin reported: $err"
+else
+  after="$(runscript "$(fixture "$TMP/artboard-state.body.js")")"
+  read -r w h clipped <<<"$(printf '%s' "$after" | node -e '
+    let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+      const o = JSON.parse(s.trim());
+      console.log(Math.round(o.width), Math.round(o.height), o.clipped);
+    })')"
+  grew=false
+  { [ "$w" -gt 100 ] || [ "$h" -gt 50 ]; } && grew=true
+  if [ "$clipped" != "false" ]; then
+    bad "artboard: content still clipped (board ${w}x${h})"
+  elif [ "$grew" != "true" ]; then
+    bad "artboard: board never resized (${w}x${h}) — the overflow case was not exercised"
+  else
+    ok "artboard: resized 100x50 -> ${w}x${h}, content no longer clipped"
+  fi
 fi
 
 info "Unprojectable layers — an image alongside a shape"
-runscript "$TMP/image.js" >/dev/null
+setup "$(fixture "$TMP/image.body.js")"
 err="$(runcmd create-front)"
-if [ -n "$err" ]; then
-  bad "image: plugin reported: $err"
-else
-  ok "image: completed without error (shape projected, image reported to the user)"
-fi
+[ -z "$err" ] && ok "image: completed without error (shape projected, image reported to the user)" \
+              || bad "image: plugin reported: $err"
 
 info "Empty selection"
-runscript "$TMP/empty.js" >/dev/null
+setup "$(fixture "$TMP/empty.body.js")"
 err="$(runcmd create-top)"
 [ -z "$err" ] && ok "empty selection: message shown, no throw" || bad "empty selection: $err"
 
 # ---------------------------------------------------------------- teardown ---
 
-runscript "$TMP/empty.js" >/dev/null 2>&1
+runscript "$(fixture "$TMP/teardown.body.js")" >/dev/null 2>&1
 
 printf "\n\033[1m%d passed, %d failed\033[0m\n" "$pass" "$fail"
 [ "$fail" -eq 0 ]

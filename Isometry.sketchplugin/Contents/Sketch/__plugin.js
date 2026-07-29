@@ -84,6 +84,10 @@ var FLATTEN_GEOMETRY_ONLY = 2;
  * keep their own shape, so the result is only a partial projection. Their
  * number is reported to the user rather than silently looking wrong.
  *
+ * A projection is taller than the artwork it came from, so projecting inside an
+ * artboard would push the result past the artboard's edge, where it would be
+ * clipped. The enclosing artboard is grown to fit whenever that would happen.
+ *
  * Does nothing but show a message when there is no open document or nothing is
  * selected.
  */
@@ -110,12 +114,17 @@ function project(face) {
   }
   var flattener = flattenerClass.alloc().init();
   var scene = document.sketchObject.documentData();
+
+  // Captured before grouping, because the layers are about to be moved into the
+  // scaffolding group and will report that group as their parent instead.
+  var parent = layers[0].parent;
   var skipped = 0;
+  var fittedArtboard = false;
   withUndoGrouping(document, "Create ".concat(face, " isometric projection"), function () {
     // The group is scaffolding: it gives the whole selection a single frame to
     // rotate and stretch, and is dissolved again before returning.
     var group = new (sketch__WEBPACK_IMPORTED_MODULE_0___default().Group)({
-      parent: layers[0].parent,
+      parent: parent,
       layers: layers
     });
     group.adjustToFit();
@@ -133,10 +142,122 @@ function project(face) {
       return layer.select_byExtendingSelection(true, true);
     });
     native.ungroup();
+    fittedArtboard = fitEnclosingArtboard(parent);
   });
+  var notes = [];
   if (skipped > 0) {
-    sketch__WEBPACK_IMPORTED_MODULE_0___default().UI.message("".concat(skipped, " layer").concat(skipped === 1 ? '' : 's', " had no path geometry and could not be projected."));
+    notes.push("".concat(skipped, " layer").concat(skipped === 1 ? '' : 's', " had no path geometry and could not be projected."));
   }
+  if (fittedArtboard) {
+    notes.push('Artboard resized to fit the projection.');
+  }
+  if (notes.length > 0) {
+    sketch__WEBPACK_IMPORTED_MODULE_0___default().UI.message(notes.join(' '));
+  }
+}
+
+/**
+ * Artboards clip whatever sticks out of them, and an isometric projection is
+ * taller than the artwork it came from — so a projection made inside an artboard
+ * would be silently cut off at the edge. Grows the artboard to fit when that has
+ * happened.
+ *
+ * `parent` is the container the projected layers live in, at any depth below the
+ * artboard. Returns true when an artboard was actually resized, so the caller
+ * can mention it; false when there is no enclosing artboard or nothing overflows
+ * (in which case the artboard is left exactly as the user sized it).
+ */
+function fitEnclosingArtboard(parent) {
+  var artboard = enclosingArtboard(parent);
+  if (!artboard || !contentOverflows(artboard)) return false;
+  artboard.adjustToFit();
+  return true;
+}
+function enclosingArtboard(layer) {
+  var node = layer;
+  while (node && node.type !== 'Artboard') {
+    node = node.type === 'Page' ? null : node.parent;
+  }
+  return node || null;
+}
+
+/** Half a point — below this, an overhang is rounding noise, not clipping. */
+var OVERFLOW_TOLERANCE = 0.5;
+function contentOverflows(artboard) {
+  var bounds = contentBounds(artboard);
+  if (!bounds) return false;
+  return bounds.minX < -OVERFLOW_TOLERANCE || bounds.minY < -OVERFLOW_TOLERANCE || bounds.maxX > artboard.frame.width + OVERFLOW_TOLERANCE || bounds.maxY > artboard.frame.height + OVERFLOW_TOLERANCE;
+}
+
+/**
+ * The true visual bounds of everything inside `container`, in its own
+ * coordinates. A layer's `frame` ignores its rotation, so rotated layers have to
+ * be measured through the accumulated transform of every ancestor instead.
+ *
+ * Returns null for an empty container.
+ */
+function contentBounds(container) {
+  var minX = Infinity;
+  var minY = Infinity;
+  var maxX = -Infinity;
+  var maxY = -Infinity;
+  function measure(layer, inherited) {
+    var combined = multiply(inherited, layerTransform(layer));
+    if (layer.layers && layer.layers.length > 0) {
+      layer.layers.forEach(function (child) {
+        return measure(child, combined);
+      });
+      return;
+    }
+    var _layer$frame = layer.frame,
+      width = _layer$frame.width,
+      height = _layer$frame.height;
+    var corners = [[0, 0], [width, 0], [width, height], [0, height]];
+    corners.forEach(function (corner) {
+      var point = transformPoint(combined, corner);
+      minX = Math.min(minX, point[0]);
+      minY = Math.min(minY, point[1]);
+      maxX = Math.max(maxX, point[0]);
+      maxY = Math.max(maxY, point[1]);
+    });
+  }
+  var IDENTITY = [1, 0, 0, 1, 0, 0];
+  container.layers.forEach(function (child) {
+    return measure(child, IDENTITY);
+  });
+  return Number.isFinite(minX) ? {
+    minX: minX,
+    minY: minY,
+    maxX: maxX,
+    maxY: maxY
+  } : null;
+}
+
+// Affine transforms as [a, b, c, d, tx, ty], mapping (x, y) to
+// (a·x + c·y + tx, b·x + d·y + ty).
+
+function multiply(m, n) {
+  return [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
+}
+function transformPoint(m, point) {
+  var x = point[0];
+  var y = point[1];
+  return [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+}
+
+/** A layer's placement in its parent: rotation about its own centre, then offset. */
+function layerTransform(layer) {
+  var _layer$frame2 = layer.frame,
+    x = _layer$frame2.x,
+    y = _layer$frame2.y,
+    width = _layer$frame2.width,
+    height = _layer$frame2.height;
+  var degrees = layer.transform.rotation || 0;
+  var radians = degrees * Math.PI / 180;
+  var cos = Math.cos(radians);
+  var sin = Math.sin(radians);
+  var rotation = [cos, -sin, sin, cos, 0, 0];
+  return multiply([1, 0, 0, 1, x + width / 2, y + height / 2], multiply(rotation, [1, 0, 0, 1, -width / 2, -height / 2]));
 }
 
 /**
