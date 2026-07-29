@@ -28,10 +28,12 @@ The plugin can generate 3 types of isometric projections from your source layers
 
 Select one or more layers, then choose **Plugins → Isometry** and pick a projection.
 
-Note that projecting inside an artboard resizes that artboard. A projection is always
-larger than the artwork it came from — an 800×604 artboard's contents become 566×820 — and
-artboards clip whatever sticks out, so the enclosing artboard is grown to fit rather than
-letting the result be silently cut off. Artboards that already fit are left alone.
+Note that projecting an artboard, or anything inside one, resizes that artboard. A
+projection is always larger than the artwork it came from — an 800×604 artboard's contents
+become 566×820 — and artboards clip whatever sticks out, so the artboard is resized to fit
+rather than letting the result be silently cut off. This applies whether you select layers
+inside the artboard or select the artboard itself. The fit is exact, so a dimension that
+wasn't overflowing can end up smaller. Artboards that already fit are left alone.
 
 Text layers are converted to outlines, since a sheared glyph can no longer be represented
 as editable text. Images and symbol instances have no path geometry and cannot be sheared;
@@ -57,7 +59,8 @@ npm test             # end-to-end verification against a real Sketch install
 document, runs the plugin's commands against it, reads the resulting path geometry back
 out, and compares it to the isometric matrix `R(θ₂)·S(sx,sy)·R(θ₁)`. It covers the three
 faces on a rectangle, nested groups with a bezier oval and a text layer, a projection
-inside a tight artboard, an image that cannot be projected, and an empty selection.
+inside a tight artboard, a projection of an artboard selected directly, an image that
+cannot be projected, and an empty selection.
 
 Your own open documents are left alone: each fixture creates its own document, tagged by
 naming its page `ISOMETRY-TEST`, and only tagged documents are ever closed. Each fixture
