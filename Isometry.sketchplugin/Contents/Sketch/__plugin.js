@@ -86,7 +86,7 @@ var FLATTEN_GEOMETRY_ONLY = 2;
  *
  * A projection is taller than the artwork it came from, so projecting inside an
  * artboard would push the result past the artboard's edge, where it would be
- * clipped. The enclosing artboard is grown to fit whenever that would happen.
+ * clipped. The enclosing artboard is resized to fit whenever that would happen.
  *
  * Does nothing but show a message when there is no open document or nothing is
  * selected.
@@ -119,7 +119,7 @@ function project(face) {
   // scaffolding group and will report that group as their parent instead.
   var parent = layers[0].parent;
   var skipped = 0;
-  var fittedArtboard = false;
+  var fittedArtboards = 0;
   withUndoGrouping(document, "Create ".concat(face, " isometric projection"), function () {
     // The group is scaffolding: it gives the whole selection a single frame to
     // rotate and stretch, and is dissolved again before returning.
@@ -142,14 +142,16 @@ function project(face) {
       return layer.select_byExtendingSelection(true, true);
     });
     native.ungroup();
-    fittedArtboard = fitEnclosingArtboard(parent);
+    fittedArtboards = fitArtboards(projected, parent);
   });
   var notes = [];
   if (skipped > 0) {
     notes.push("".concat(skipped, " layer").concat(skipped === 1 ? '' : 's', " had no path geometry and could not be projected."));
   }
-  if (fittedArtboard) {
+  if (fittedArtboards === 1) {
     notes.push('Artboard resized to fit the projection.');
+  } else if (fittedArtboards > 1) {
+    notes.push("".concat(fittedArtboards, " artboards resized to fit the projection."));
   }
   if (notes.length > 0) {
     sketch__WEBPACK_IMPORTED_MODULE_0___default().UI.message(notes.join(' '));
@@ -158,21 +160,53 @@ function project(face) {
 
 /**
  * Artboards clip whatever sticks out of them, and an isometric projection is
- * taller than the artwork it came from — so a projection made inside an artboard
- * would be silently cut off at the edge. Grows the artboard to fit when that has
- * happened.
+ * taller than the artwork it came from — so a projection touching an artboard
+ * would be silently cut off at its edge. Resizes every artboard involved that no
+ * longer contains its own contents.
  *
- * `parent` is the container the projected layers live in, at any depth below the
- * artboard. Returns true when an artboard was actually resized, so the caller
- * can mention it; false when there is no enclosing artboard or nothing overflows
- * (in which case the artboard is left exactly as the user sized it).
+ * The fit is exact, so a dimension that was not overflowing can come out smaller
+ * than the user left it. That is deliberate: it keeps the artboard tight to its
+ * contents, the same as Sketch's own resize-to-fit.
+ *
+ * An artboard can be involved two ways, and both have to be checked: the
+ * projection can happen *inside* it (so it is an ancestor of the layers), or the
+ * artboard itself can be part of the selection and be projected directly. Only
+ * checking ancestors misses the second case entirely, because the selection's
+ * parent is then the page.
+ *
+ * `projected` are the resulting native layers and `parent` is the container they
+ * were placed in. Returns how many artboards were resized, so the caller can say
+ * so; artboards that still fit are left exactly as the user sized them.
  */
-function fitEnclosingArtboard(parent) {
-  var artboard = enclosingArtboard(parent);
-  if (!artboard || !contentOverflows(artboard)) return false;
-  artboard.adjustToFit();
-  return true;
+function fitArtboards(projected, parent) {
+  var boards = [];
+  var seen = {};
+  function consider(layer) {
+    var board = enclosingArtboard(layer);
+    if (!board) return;
+    var id = String(board.id);
+    if (seen[id]) return;
+    seen[id] = true;
+    boards.push(board);
+  }
+  projected.forEach(function (native) {
+    try {
+      consider(sketch__WEBPACK_IMPORTED_MODULE_0___default().fromNative(native));
+    } catch (e) {
+      // A layer the JS API cannot wrap cannot be an artboard either.
+    }
+  });
+  consider(parent);
+  var fitted = 0;
+  boards.forEach(function (board) {
+    if (!contentOverflows(board)) return;
+    board.adjustToFit();
+    fitted += 1;
+  });
+  return fitted;
 }
+
+/** The artboard `layer` sits in, or `layer` itself when it is one. */
 function enclosingArtboard(layer) {
   var node = layer;
   while (node && node.type !== 'Artboard') {

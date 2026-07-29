@@ -147,6 +147,25 @@ rect.selected = true
 confirmFrontmost(doc)
 JS
 
+# The artboard itself is selected, rather than layers inside it. The plugin then
+# projects the artboard directly, and its parent is the page — so an artboard-fit
+# that only inspects ancestors finds nothing and the result is clipped.
+cat > "$TMP/artboard-selected.body.js" <<'JS'
+var doc = newTestDocument()
+var board = new sketch.Artboard({
+  parent: doc.pages[0], name: 'Board',
+  frame: { x: 0, y: 0, width: 100, height: 50 },
+})
+new sketch.ShapePath({
+  parent: board,
+  frame: { x: 0, y: 0, width: 100, height: 50 },
+  shapeType: sketch.ShapePath.ShapeType.Rectangle,
+})
+doc.selectedLayers.clear()
+board.selected = true
+confirmFrontmost(doc)
+JS
+
 cat > "$TMP/empty.body.js" <<'JS'
 var doc = newTestDocument()
 doc.selectedLayers.clear()
@@ -320,6 +339,21 @@ else
   else
     ok "artboard: resized 100x50 -> ${w}x${h}, content no longer clipped"
   fi
+fi
+
+info "Artboard selected directly — the artboard itself is the projected layer"
+setup "$(fixture "$TMP/artboard-selected.body.js")"
+err="$(runcmd create-left)"
+if [ -n "$err" ]; then
+  bad "artboard-selected: plugin reported: $err"
+else
+  read -r w h clipped <<<"$(runscript "$(fixture "$TMP/artboard-state.body.js")" | node -e '
+    let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+      const o = JSON.parse(s.trim());
+      console.log(Math.round(o.width), Math.round(o.height), o.clipped);
+    })')"
+  [ "$clipped" = "false" ] && ok "artboard-selected: resized 100x50 -> ${w}x${h}, content not clipped" \
+                           || bad "artboard-selected: content clipped (board ${w}x${h})"
 fi
 
 info "Unprojectable layers — an image alongside a shape"
