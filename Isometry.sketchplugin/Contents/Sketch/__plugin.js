@@ -4,220 +4,359 @@ function __skpm_run (key, context) {
   globalThis.context = context;
   try {
 
-var exports =
-/******/ (function(modules) { // webpackBootstrap
-/******/ 	// The module cache
-/******/ 	var installedModules = {};
-/******/
-/******/ 	// The require function
-/******/ 	function __webpack_require__(moduleId) {
-/******/
-/******/ 		// Check if module is in cache
-/******/ 		if(installedModules[moduleId]) {
-/******/ 			return installedModules[moduleId].exports;
-/******/ 		}
-/******/ 		// Create a new module (and put it into the cache)
-/******/ 		var module = installedModules[moduleId] = {
-/******/ 			i: moduleId,
-/******/ 			l: false,
-/******/ 			exports: {}
-/******/ 		};
-/******/
-/******/ 		// Execute the module function
-/******/ 		modules[moduleId].call(module.exports, module, module.exports, __webpack_require__);
-/******/
-/******/ 		// Flag the module as loaded
-/******/ 		module.l = true;
-/******/
-/******/ 		// Return the exports of the module
-/******/ 		return module.exports;
-/******/ 	}
-/******/
-/******/
-/******/ 	// expose the modules object (__webpack_modules__)
-/******/ 	__webpack_require__.m = modules;
-/******/
-/******/ 	// expose the module cache
-/******/ 	__webpack_require__.c = installedModules;
-/******/
-/******/ 	// define getter function for harmony exports
-/******/ 	__webpack_require__.d = function(exports, name, getter) {
-/******/ 		if(!__webpack_require__.o(exports, name)) {
-/******/ 			Object.defineProperty(exports, name, { enumerable: true, get: getter });
-/******/ 		}
-/******/ 	};
-/******/
-/******/ 	// define __esModule on exports
-/******/ 	__webpack_require__.r = function(exports) {
-/******/ 		if(typeof Symbol !== 'undefined' && Symbol.toStringTag) {
-/******/ 			Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
-/******/ 		}
-/******/ 		Object.defineProperty(exports, '__esModule', { value: true });
-/******/ 	};
-/******/
-/******/ 	// create a fake namespace object
-/******/ 	// mode & 1: value is a module id, require it
-/******/ 	// mode & 2: merge all properties of value into the ns
-/******/ 	// mode & 4: return value when already ns object
-/******/ 	// mode & 8|1: behave like require
-/******/ 	__webpack_require__.t = function(value, mode) {
-/******/ 		if(mode & 1) value = __webpack_require__(value);
-/******/ 		if(mode & 8) return value;
-/******/ 		if((mode & 4) && typeof value === 'object' && value && value.__esModule) return value;
-/******/ 		var ns = Object.create(null);
-/******/ 		__webpack_require__.r(ns);
-/******/ 		Object.defineProperty(ns, 'default', { enumerable: true, value: value });
-/******/ 		if(mode & 2 && typeof value != 'string') for(var key in value) __webpack_require__.d(ns, key, function(key) { return value[key]; }.bind(null, key));
-/******/ 		return ns;
-/******/ 	};
-/******/
-/******/ 	// getDefaultExport function for compatibility with non-harmony modules
-/******/ 	__webpack_require__.n = function(module) {
-/******/ 		var getter = module && module.__esModule ?
-/******/ 			function getDefault() { return module['default']; } :
-/******/ 			function getModuleExports() { return module; };
-/******/ 		__webpack_require__.d(getter, 'a', getter);
-/******/ 		return getter;
-/******/ 	};
-/******/
-/******/ 	// Object.prototype.hasOwnProperty.call
-/******/ 	__webpack_require__.o = function(object, property) { return Object.prototype.hasOwnProperty.call(object, property); };
-/******/
-/******/ 	// __webpack_public_path__
-/******/ 	__webpack_require__.p = "";
-/******/
-/******/
-/******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = "./src/plugin.js");
-/******/ })
-/************************************************************************/
-/******/ ({
+var exports;
+/******/ (() => { // webpackBootstrap
+/******/ 	"use strict";
+/******/ 	var __webpack_modules__ = ({
 
-/***/ "./src/plugin.js":
-/*!***********************!*\
-  !*** ./src/plugin.js ***!
-  \***********************/
-/*! exports provided: onCreateTop, onCreateLeft, onCreateFront */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "onCreateTop", function() { return onCreateTop; });
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "onCreateLeft", function() { return onCreateLeft; });
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "onCreateFront", function() { return onCreateFront; });
-/* harmony import */ var _transform__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./transform */ "./src/transform.js");
-
-var tan30 = Math.tan(Math.PI / 6);
-function onCreateTop(context) {
-  Object(_transform__WEBPACK_IMPORTED_MODULE_0__["applyTransform"])(context.selection, 45, 1, tan30, 0);
-}
-function onCreateLeft(context) {
-  Object(_transform__WEBPACK_IMPORTED_MODULE_0__["applyTransform"])(context.selection, -45, tan30, 1, 30);
-}
-function onCreateFront(context) {
-  Object(_transform__WEBPACK_IMPORTED_MODULE_0__["applyTransform"])(context.selection, 45, tan30, 1, -30);
-}
-
-/***/ }),
-
-/***/ "./src/transform.js":
+/***/ "./src/transform.js"
 /*!**************************!*\
   !*** ./src/transform.js ***!
   \**************************/
-/*! exports provided: applyTransform */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
-"use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "applyTransform", function() { return applyTransform; });
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   project: () => (/* binding */ project)
+/* harmony export */ });
 /* harmony import */ var sketch__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! sketch */ "sketch");
 /* harmony import */ var sketch__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(sketch__WEBPACK_IMPORTED_MODULE_0__);
 
-function applyTransform(layers, angle1, scaleX, scaleY, angle2) {
-  if (layers.count() == 0) {
-    sketch__WEBPACK_IMPORTED_MODULE_0___default.a.UI.message("Please select a layer");
+var TAN_30 = Math.tan(Math.PI / 6);
+
+/**
+ * Each face is described by the only sequence Sketch can actually perform:
+ * rotate the group, bake that rotation into the path geometry, stretch the
+ * (now axis-aligned) bounding box, then optionally rotate and bake once more.
+ *
+ * The bake between the rotate and the stretch is what turns this into a shear
+ * instead of a rotated resize. Sketch resizes a group along its *unrotated*
+ * axes, so the rotation has to become real path geometry before the
+ * non-proportional scale is applied.
+ *
+ * `finalRotation: 0` means the face is complete after the stretch.
+ */
+var PROJECTIONS = {
+  top: {
+    rotation: 45,
+    scaleX: 1,
+    scaleY: TAN_30,
+    finalRotation: 0
+  },
+  left: {
+    rotation: -45,
+    scaleX: TAN_30,
+    scaleY: 1,
+    finalRotation: 30
+  },
+  front: {
+    rotation: 45,
+    scaleX: TAN_30,
+    scaleY: 1,
+    finalRotation: -30
+  }
+};
+
+/**
+ * Sketch 2026 moved the layer flattener into the SketchControllers framework as
+ * a Swift class, so it no longer resolves under the bare `MSLayerFlattener`
+ * symbol that older Sketch versions exposed.
+ */
+var FLATTENER_CLASS = 'SketchControllers.MSLayerFlattener';
+
+/** Flatten path geometry only; leave styles, fills and effects intact. */
+var FLATTEN_GEOMETRY_ONLY = 2;
+
+/**
+ * Replaces the current selection with its isometric projection onto one face of
+ * a cube, and leaves the resulting layers selected.
+ *
+ * `face` is one of 'top', 'left' or 'front'. Callers do not need to know the
+ * angles, scale factors, or the order Sketch requires them to be applied in —
+ * that is the one design decision this module exists to hide.
+ *
+ * The projection is destructive and is registered as a single undo step:
+ * source layers are consumed, and any text is converted to outlines because a
+ * sheared glyph can no longer be represented as editable text.
+ *
+ * Layers with no path geometry (images, symbol instances) cannot be sheared.
+ * They are still rotated and scaled along with the rest of the selection but
+ * keep their own shape, so the result is only a partial projection. Their
+ * number is reported to the user rather than silently looking wrong.
+ *
+ * Does nothing but show a message when there is no open document or nothing is
+ * selected.
+ */
+function project(face) {
+  var projection = PROJECTIONS[face];
+  if (!projection) {
+    throw new Error("Unknown isometric face '".concat(face, "'."));
+  }
+  var document = sketch__WEBPACK_IMPORTED_MODULE_0___default().getSelectedDocument();
+  if (!document) {
+    sketch__WEBPACK_IMPORTED_MODULE_0___default().UI.message('Isometry needs an open document.');
     return;
   }
+  var selection = document.selectedLayers;
+  var layers = selection.layers;
+  if (layers.length === 0) {
+    sketch__WEBPACK_IMPORTED_MODULE_0___default().UI.message('Please select a layer.');
+    return;
+  }
+  var flattenerClass = NSClassFromString(FLATTENER_CLASS);
+  if (!flattenerClass) {
+    sketch__WEBPACK_IMPORTED_MODULE_0___default().UI.message('Isometry is not compatible with this version of Sketch.');
+    return;
+  }
+  var flattener = flattenerClass.alloc().init();
+  var scene = document.sketchObject.documentData();
+  var skipped = 0;
+  withUndoGrouping(document, "Create ".concat(face, " isometric projection"), function () {
+    // The group is scaffolding: it gives the whole selection a single frame to
+    // rotate and stretch, and is dissolved again before returning.
+    var group = new (sketch__WEBPACK_IMPORTED_MODULE_0___default().Group)({
+      parent: layers[0].parent,
+      layers: layers
+    });
+    group.adjustToFit();
+    var native = group.sketchObject;
+    rotate(native, projection.rotation);
+    skipped = bakeTransforms(native, flattener, scene);
+    stretch(native, projection.scaleX, projection.scaleY);
+    if (projection.finalRotation !== 0) {
+      rotate(native, projection.finalRotation);
+      bakeTransforms(native, flattener, scene);
+    }
+    var projected = childrenOf(native);
+    selection.clear();
+    projected.forEach(function (layer) {
+      return layer.select_byExtendingSelection(true, true);
+    });
+    native.ungroup();
+  });
+  if (skipped > 0) {
+    sketch__WEBPACK_IMPORTED_MODULE_0___default().UI.message("".concat(skipped, " layer").concat(skipped === 1 ? '' : 's', " had no path geometry and could not be projected."));
+  }
+}
 
-  var layerArray = MSLayerArray.arrayWithLayers(layers);
-  var group = MSLayerGroup.groupWithLayers(layerArray);
-  rotate(group, angle1);
-  flatten(group);
-  scale(group, scaleX, scaleY);
-
-  if (angle2 != 0.0) {
-    rotate(group, angle2);
-    flatten(group);
+/**
+ * Bakes every rotation at or below `native` into the path geometry itself, so
+ * that the layers end up axis-aligned while looking unchanged on the canvas.
+ *
+ * Returns the number of layers that had no path geometry and so were left as
+ * they were.
+ */
+function bakeTransforms(native, flattener, scene) {
+  var kind = String(native.class());
+  if (kind === 'MSLayerGroup' || kind === 'MSShapeGroup') {
+    // Push the group's own rotation onto its children, then bake each of them.
+    native.moveTransformsToChildren();
+    return childrenOf(native).reduce(function (skipped, child) {
+      return skipped + bakeTransforms(child, flattener, scene);
+    }, 0);
+  }
+  if (kind === 'MSTextLayer') {
+    // Sketch swaps the text layer for its outlines in place, so the returned
+    // layers are already parented and the text layer is already detached.
+    var outlines = childrenOfArray(native.layersByConvertingToOutlines());
+    if (outlines.length === 0) return 1;
+    return outlines.reduce(function (skipped, outline) {
+      return skipped + bakeTransforms(outline, flattener, scene);
+    }, 0);
   }
 
-  group.containedLayers().forEach(function (layer) {
-    return layer.select_byExtendingSelection(true, true);
-  });
-  group.ungroup();
+  // Ask the layer whether it can produce a path rather than matching against a
+  // list of shape class names, so shape types added by future Sketch versions
+  // keep working.
+  if (!native.respondsToSelector(NSSelectorFromString('flattenedLayer'))) {
+    return 1;
+  }
+  var flattened = native.flattenedLayer();
+  flattener.flattenLayer_inScene_options(flattened, scene, FLATTEN_GEOMETRY_ONLY);
+  replaceLayer(native, flattened);
+  return 0;
 }
-
-function rotate(layer, angle) {
-  var rotation = layer.rotation() + angle;
-  layer.setRotation(rotation);
+function rotate(native, degrees) {
+  native.setRotation(native.rotation() + degrees);
 }
-
-function scale(layer, scaleX, scaleY) {
-  var frame = layer.frame();
+function stretch(native, scaleX, scaleY) {
+  var frame = native.frame();
   frame.setConstrainProportions(false);
   frame.setWidth(frame.width() * scaleX);
   frame.setHeight(frame.height() * scaleY);
 }
 
-function flatten(layer) {
-  switch (String(layer.class())) {
-    case "MSLayerGroup":
-    case "MSShapeGroup":
-      layer.moveTransformsToChildren();
-      layer.fixGeometryWithOptions(1);
-      layer.containedLayers().forEach(function (child) {
-        return flatten(child);
-      });
-      break;
+/** Swaps `original` for `replacement` at the same position in its parent. */
+function replaceLayer(original, replacement) {
+  var parent = original.parentGroup();
+  parent.insertLayer_afterLayer(replacement, original);
+  parent.removeLayer(original);
+}
 
-    case "MSRectangleShape":
-    case "MSOvalShape":
-    case "MSShapePathLayer":
-    case "MSTriangleShape":
-    case "MSStarShape":
-    case "MSPolygonShape":
-      var flattened = layer.flattenedLayer();
-      var flattener = MSLayerFlattener.alloc().init();
-      flattener.flattenLayer_options(flattened, 2);
-      var parent = layer.parentGroup();
-      parent.insertLayer_afterLayer(flattened, layer);
-      parent.removeLayer(layer);
-      break;
+/**
+ * Snapshots a layer's children into a plain array. Baking replaces layers
+ * inside their parent, so iterating the live collection would skip siblings.
+ */
+function childrenOf(native) {
+  return childrenOfArray(native.containedLayers());
+}
+function childrenOfArray(nativeArray) {
+  if (!nativeArray) return [];
+  var children = [];
+  for (var i = 0; i < Number(nativeArray.count()); i += 1) {
+    children.push(nativeArray.objectAtIndex(i));
+  }
+  return children;
+}
 
-    case "MSTextLayer":
-      var outlineLayer = layer.layersByConvertingToOutlines()[0];
-      flatten(outlineLayer);
-      break;
-
-    default:
-      console.log("Default");
-      break;
+/**
+ * Runs `work` so the user can undo the whole projection in one step. Documents
+ * opened without a window have no undo manager, in which case `work` still runs.
+ */
+function withUndoGrouping(document, actionName, work) {
+  var undoManager = document.sketchObject.undoManager();
+  if (!undoManager) {
+    work();
+    return;
+  }
+  undoManager.beginUndoGrouping();
+  try {
+    work();
+    undoManager.setActionName(actionName);
+  } finally {
+    undoManager.endUndoGrouping();
   }
 }
 
-/***/ }),
+/***/ },
 
-/***/ "sketch":
+/***/ "sketch"
 /*!*************************!*\
   !*** external "sketch" ***!
   \*************************/
-/*! no static exports found */
-/***/ (function(module, exports) {
+(module) {
 
 module.exports = require("sketch");
 
-/***/ })
+/***/ }
 
-/******/ });
+/******/ 	});
+/************************************************************************/
+/******/ 	// The module cache
+/******/ 	const __webpack_module_cache__ = {};
+/******/ 	
+/******/ 	// The require function
+/******/ 	function __webpack_require__(moduleId) {
+/******/ 		// Check if module is in cache
+/******/ 		const cachedModule = __webpack_module_cache__[moduleId];
+/******/ 		if (cachedModule !== undefined) {
+/******/ 			return cachedModule.exports;
+/******/ 		}
+/******/ 		// Create a new module (and put it into the cache)
+/******/ 		const module = __webpack_module_cache__[moduleId] = {
+/******/ 			// no module.id needed
+/******/ 			// no module.loaded needed
+/******/ 			exports: {}
+/******/ 		};
+/******/ 	
+/******/ 		// Execute the module function
+/******/ 		if (!(moduleId in __webpack_modules__)) {
+/******/ 			delete __webpack_module_cache__[moduleId];
+/******/ 			const e = new Error("Cannot find module '" + moduleId + "'");
+/******/ 			e.code = 'MODULE_NOT_FOUND';
+/******/ 			throw e;
+/******/ 		}
+/******/ 		__webpack_modules__[moduleId](module, module.exports, __webpack_require__);
+/******/ 	
+/******/ 		// Return the exports of the module
+/******/ 		return module.exports;
+/******/ 	}
+/******/ 	
+/************************************************************************/
+/******/ 	/* webpack/runtime/compat get default export */
+/******/ 	(() => {
+/******/ 		// getDefaultExport function for compatibility with non-harmony modules
+/******/ 		__webpack_require__.n = (module) => {
+/******/ 			const getter = module && module.__esModule ?
+/******/ 				() => (module['default']) :
+/******/ 				() => (module);
+/******/ 			__webpack_require__.d(getter, { a: getter });
+/******/ 			return getter;
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/define property getters */
+/******/ 	(() => {
+/******/ 		// define getter/value functions for harmony exports
+/******/ 		__webpack_require__.d = (exports, definition) => {
+/******/ 			if(Array.isArray(definition)) {
+/******/ 				var i = 0;
+/******/ 				while(i < definition.length) {
+/******/ 					var key = definition[i++];
+/******/ 					var binding = definition[i++];
+/******/ 					if(!__webpack_require__.o(exports, key)) {
+/******/ 						if(binding === 0) {
+/******/ 							Object.defineProperty(exports, key, { enumerable: true, value: definition[i++] });
+/******/ 						} else {
+/******/ 							Object.defineProperty(exports, key, { enumerable: true, get: binding });
+/******/ 						}
+/******/ 					} else if(binding === 0) { i++; }
+/******/ 				}
+/******/ 			} else {
+/******/ 				for(var key in definition) {
+/******/ 					if(__webpack_require__.o(definition, key) && !__webpack_require__.o(exports, key)) {
+/******/ 						Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
+/******/ 					}
+/******/ 				}
+/******/ 			}
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/hasOwnProperty shorthand */
+/******/ 	(() => {
+/******/ 		__webpack_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/make namespace object */
+/******/ 	(() => {
+/******/ 		// define __esModule on exports
+/******/ 		__webpack_require__.r = (exports) => {
+/******/ 			if(Symbol.toStringTag) {
+/******/ 				Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
+/******/ 			}
+/******/ 			Object.defineProperty(exports, '__esModule', { value: true });
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/************************************************************************/
+let __webpack_exports__ = {};
+// This entry needs to be wrapped in an IIFE because it needs to be isolated against other modules in the chunk.
+(() => {
+/*!***********************!*\
+  !*** ./src/plugin.js ***!
+  \***********************/
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   onCreateFront: () => (/* binding */ onCreateFront),
+/* harmony export */   onCreateLeft: () => (/* binding */ onCreateLeft),
+/* harmony export */   onCreateTop: () => (/* binding */ onCreateTop)
+/* harmony export */ });
+/* harmony import */ var _transform__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./transform */ "./src/transform.js");
+
+function onCreateTop() {
+  (0,_transform__WEBPACK_IMPORTED_MODULE_0__.project)('top');
+}
+function onCreateLeft() {
+  ;(0,_transform__WEBPACK_IMPORTED_MODULE_0__.project)('left');
+}
+function onCreateFront() {
+  ;(0,_transform__WEBPACK_IMPORTED_MODULE_0__.project)('front');
+}
+})();
+
+exports = __webpack_exports__;
+/******/ })()
+;
     if (key === 'default' && typeof exports === 'function') {
       exports(context);
     } else if (typeof exports[key] !== 'function') {
