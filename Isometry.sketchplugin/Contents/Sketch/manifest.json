@@ -4,7 +4,7 @@
   "icon": "icon.png",
   "identifier": "com.maxkonovalov.isometry",
   "author": "Max Konovalov",
-  "version": "1.0",
+  "version": "2.0.0",
   "commands": [
     {
       "script": "__plugin.js",
