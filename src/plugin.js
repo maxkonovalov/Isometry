@@ -1,15 +1,13 @@
-import { applyTransform } from './transform'
+import { project } from './transform'
 
-const tan30 = Math.tan(Math.PI / 6)
-
-export function onCreateTop(context) {
-    applyTransform(context.selection, 45, 1, tan30, 0)
+export function onCreateTop() {
+  project('top')
 }
 
-export function onCreateLeft(context) {
-    applyTransform(context.selection, -45, tan30, 1, 30)
+export function onCreateLeft() {
+  project('left')
 }
 
-export function onCreateFront(context) {
-    applyTransform(context.selection, 45, tan30, 1, -30)
+export function onCreateFront() {
+  project('front')
 }

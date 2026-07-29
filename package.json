@@ -3,7 +3,7 @@
   "description": "Create isometric projections from layers",
   "version": "1.0.0",
   "engines": {
-    "sketch": ">=52.0"
+    "sketch": ">=100.0"
   },
   "skpm": {
     "name": "Isometry",
@@ -17,10 +17,11 @@
     "build": "skpm-build",
     "watch": "skpm-build --watch",
     "start": "skpm-build --watch --run",
+    "test": "npm run build && ./test/verify.sh",
     "postinstall": "npm run build && skpm-link"
   },
   "devDependencies": {
-    "@skpm/builder": "^0.7.0"
+    "@skpm/builder": "^1.0.0"
   },
   "author": "Max Konovalov",
   "homepage": "https://github.com/maxkonovalov/Isometry",
