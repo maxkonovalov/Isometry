@@ -28,6 +28,18 @@ The plugin can generate 3 types of isometric projections from your source layers
 
 Select one or more layers, then choose **Plugins → Isometry** and pick a projection.
 
+Layers sharing an artboard are sheared as one composition, even when they live in different
+groups: their offsets relative to each other are transformed by the projection too, so a row
+of shapes in separate groups stays a row instead of drifting apart. Nothing is re-parented
+to achieve that — Sketch's grouping doesn't remap frames between coordinate spaces, so
+grouping across containers would pull layers out of their container *and* pile them on the
+same spot. Each container is projected on its own about a shared anchor point instead.
+
+Layers in different artboards are projected independently. An artboard is a fixed canvas
+rather than part of one plane with the others, so composing across two of them would push
+content outside its own artboard, and the resize that follows would drag the artboard itself
+across the canvas. Projecting artwork shouldn't rearrange where artboards sit.
+
 Note that projecting an artboard, or anything inside one, resizes that artboard. A
 projection is always larger than the artwork it came from — an 800×604 artboard's contents
 become 566×820 — and artboards clip whatever sticks out, so the artboard is resized to fit
@@ -59,8 +71,11 @@ npm test             # end-to-end verification against a real Sketch install
 document, runs the plugin's commands against it, reads the resulting path geometry back
 out, and compares it to the isometric matrix `R(θ₂)·S(sx,sy)·R(θ₁)`. It covers the three
 faces on a rectangle, nested groups with a bezier oval and a text layer, a projection
-inside a tight artboard, a projection of an artboard selected directly, an image that
-cannot be projected, and an empty selection.
+inside a tight artboard, a projection of an artboard selected directly, selections spanning
+two artboards and two sibling groups (including the offset between the two, which must be
+transformed by the projection), a layer already rotated before projecting, a symbol
+instance, a gradient fill with a border and shadow, a pinned-width resizing constraint, an
+image that cannot be projected, and an empty selection.
 
 Your own open documents are left alone: each fixture creates its own document, tagged by
 naming its page `ISOMETRY-TEST`, and only tagged documents are ever closed. Each fixture
