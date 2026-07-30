@@ -121,12 +121,13 @@ function project(face) {
   // container and stacks them at the same coordinates. Each container's layers are
   // projected separately, in place, instead.
   var batches = byParent(layers);
+  var anchors = anchorsFor(batches);
   var skipped = 0;
   var fittedArtboards = 0;
   withUndoGrouping(document, "Create ".concat(face, " isometric projection"), function () {
     selection.clear();
-    batches.forEach(function (batch) {
-      var outcome = projectTogether(batch, projection, flattener, scene);
+    batches.forEach(function (batch, index) {
+      var outcome = projectTogether(batch, projection, flattener, scene, anchors[index]);
       skipped += outcome.skipped;
       fittedArtboards += outcome.fittedArtboards;
     });
@@ -135,8 +136,8 @@ function project(face) {
   if (skipped > 0) {
     notes.push("".concat(skipped, " layer").concat(skipped === 1 ? '' : 's', " had no path geometry and could not be projected."));
   }
-  if (batches.length > 1) {
-    notes.push('Selected layers were in different groups or artboards, so each set was projected separately, in place.');
+  if (artboardCount(batches) > 1) {
+    notes.push('Layers in different artboards were projected separately, in place, so nothing moved between artboards.');
   }
   if (fittedArtboards === 1) {
     notes.push('Artboard resized to fit the projection.');
@@ -159,7 +160,7 @@ function project(face) {
  *
  * Returns how many layers could not be projected and how many artboards had to be resized.
  */
-function projectTogether(layers, projection, flattener, scene) {
+function projectTogether(layers, projection, flattener, scene, anchor) {
   var parent = layers[0].parent;
 
   // The group is scaffolding: it gives the whole batch a single frame to rotate and
@@ -170,11 +171,27 @@ function projectTogether(layers, projection, flattener, scene) {
   });
   group.adjustToFit();
   var native = group.sketchObject;
+
+  // Every step below transforms the group about its own frame — rotations about its centre,
+  // the stretch about its origin. With an anchor, each step is followed by a translation
+  // that makes it equivalent to having happened about that shared point instead, which is
+  // what keeps separate batches composed with one another.
+  var toPage = anchor ? pageTransformOf(parent) : null;
+  var centre = anchor ? framePoint(native, toPage, 0.5) : null;
   rotate(native, projection.rotation);
+  if (anchor) recentre(native, toPage, rotationOffset(anchor, centre, projection.rotation));
   var skipped = bakeTransforms(native, flattener, scene);
+  var origin = anchor ? framePoint(native, toPage, 0) : null;
   stretch(native, projection.scaleX, projection.scaleY);
+  if (anchor) {
+    recentre(native, toPage, [(anchor[0] - origin[0]) * (1 - projection.scaleX), (anchor[1] - origin[1]) * (1 - projection.scaleY)]);
+  }
   if (projection.finalRotation !== 0) {
+    var finalCentre = anchor ? framePoint(native, toPage, 0.5) : null;
     rotate(native, projection.finalRotation);
+    if (anchor) {
+      recentre(native, toPage, rotationOffset(anchor, finalCentre, projection.finalRotation));
+    }
     bakeTransforms(native, flattener, scene);
   }
   var projected = childrenOf(native);
@@ -213,6 +230,121 @@ function byParent(layers) {
     batches[positions[key]].push(layer);
   });
   return batches;
+}
+
+/**
+ * The shared point each batch should be transformed about, or null to leave a batch
+ * anchored on its own frame.
+ *
+ * Batches are projected separately so that nothing is re-parented, but that alone would
+ * shear each one about its own bounding box, so layers that were side by side drift apart.
+ * Giving every batch in an artboard the same anchor restores the composition: their offsets
+ * relative to each other are transformed by the projection too, exactly as if they had been
+ * sheared as one.
+ *
+ * **The artboard is the limit deliberately.** Sharing one anchor across artboards is
+ * expressible and was measured — it does compose correctly — but an artboard is a fixed
+ * canvas, not part of one shared plane. Composing across two of them pushes content outside
+ * its own artboard, and the fit that follows drags the artboard itself across the canvas
+ * (176px left and 266px up in the case that was tried). Projecting artwork should not
+ * rearrange where artboards sit.
+ *
+ * A batch with nothing to compose against gets no anchor, so a selection inside a single
+ * container behaves exactly as it did before.
+ */
+function anchorsFor(batches) {
+  var collected = {};
+  batches.forEach(function (batch) {
+    var key = artboardKeyOf(batch);
+    collected[key] = (collected[key] || []).concat([batch]);
+  });
+  var anchorByKey = {};
+  Object.keys(collected).forEach(function (key) {
+    var set = collected[key];
+    anchorByKey[key] = set.length < 2 ? null : unionOrigin([].concat.apply([], set));
+  });
+  return batches.map(function (batch) {
+    return anchorByKey[artboardKeyOf(batch)];
+  });
+}
+
+/** Identifies the artboard a batch belongs to; '' means the page, outside any artboard. */
+function artboardKeyOf(batch) {
+  var board = enclosingArtboard(batch[0]);
+  return board ? String(board.id) : '';
+}
+
+/** How many separate artboards the batches span — each is projected independently. */
+function artboardCount(batches) {
+  var seen = {};
+  batches.forEach(function (batch) {
+    seen[artboardKeyOf(batch)] = true;
+  });
+  return Object.keys(seen).length;
+}
+
+/** Top-left of the bounding box enclosing `layers`, in page coordinates. */
+function unionOrigin(layers) {
+  var minX = Infinity;
+  var minY = Infinity;
+  layers.forEach(function (layer) {
+    var toPage = pageTransformOf(layer);
+    var _layer$frame = layer.frame,
+      width = _layer$frame.width,
+      height = _layer$frame.height;
+    var corners = [[0, 0], [width, 0], [width, height], [0, height]];
+    corners.forEach(function (corner) {
+      var point = transformPoint(toPage, corner);
+      minX = Math.min(minX, point[0]);
+      minY = Math.min(minY, point[1]);
+    });
+  });
+  return [minX, minY];
+}
+
+/** Transform mapping `container`'s own coordinates to page coordinates. */
+function pageTransformOf(container) {
+  var chain = [];
+  var node = container;
+  while (node && node.type !== 'Page') {
+    chain.push(node);
+    node = node.parent;
+  }
+  var combined = [1, 0, 0, 1, 0, 0];
+  for (var i = chain.length - 1; i >= 0; i -= 1) {
+    combined = multiply(combined, layerTransform(chain[i]));
+  }
+  return combined;
+}
+
+/** A point on the group's frame in page coordinates: `t` of 0 is its origin, 0.5 its centre. */
+function framePoint(native, toPage, t) {
+  var frame = native.frame();
+  return transformPoint(toPage, [Number(frame.x()) + Number(frame.width()) * t, Number(frame.y()) + Number(frame.height()) * t]);
+}
+
+/**
+ * How far to shift a group so that a rotation it just performed about `centre` reads as
+ * having been performed about `anchor` instead: (I − R)·(anchor − centre).
+ */
+function rotationOffset(anchor, centre, degrees) {
+  var radians = degrees * Math.PI / 180;
+  var cos = Math.cos(radians);
+  var sin = Math.sin(radians);
+  var x = anchor[0] - centre[0];
+  var y = anchor[1] - centre[1];
+  return [x - (x * cos + y * sin), y - (-x * sin + y * cos)];
+}
+
+/** Shifts a group by a page-space delta, converting it into the parent's coordinates. */
+function recentre(native, toPage, pageDelta) {
+  // Container transforms are rotation plus translation, so the linear part is orthonormal
+  // and its inverse is its transpose.
+  var localX = toPage[0] * pageDelta[0] + toPage[1] * pageDelta[1];
+  var localY = toPage[2] * pageDelta[0] + toPage[3] * pageDelta[1];
+  var frame = native.frame();
+  frame.setX(Number(frame.x()) + localX);
+  frame.setY(Number(frame.y()) + localY);
 }
 
 /**
@@ -300,9 +432,9 @@ function contentBounds(container) {
       });
       return;
     }
-    var _layer$frame = layer.frame,
-      width = _layer$frame.width,
-      height = _layer$frame.height;
+    var _layer$frame2 = layer.frame,
+      width = _layer$frame2.width,
+      height = _layer$frame2.height;
     var corners = [[0, 0], [width, 0], [width, height], [0, height]];
     corners.forEach(function (corner) {
       var point = transformPoint(combined, corner);
@@ -338,11 +470,11 @@ function transformPoint(m, point) {
 
 /** A layer's placement in its parent: rotation about its own centre, then offset. */
 function layerTransform(layer) {
-  var _layer$frame2 = layer.frame,
-    x = _layer$frame2.x,
-    y = _layer$frame2.y,
-    width = _layer$frame2.width,
-    height = _layer$frame2.height;
+  var _layer$frame3 = layer.frame,
+    x = _layer$frame3.x,
+    y = _layer$frame3.y,
+    width = _layer$frame3.width,
+    height = _layer$frame3.height;
   var degrees = layer.transform.rotation || 0;
   var radians = degrees * Math.PI / 180;
   var cos = Math.cos(radians);
