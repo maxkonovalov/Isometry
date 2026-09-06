@@ -206,11 +206,101 @@ function walk(layers, ox, oy, container) {
     var ax = ox + l.frame.x, ay = oy + l.frame.y
     if (l.layers && l.layers.length) { walk(l.layers, ax, ay, l.name); return }
     if (l.type === 'Artboard' || l.type === 'Group') return   // empty container, not a leaf
-    leaves.push({ name: String(l.name), container: String(container), x: Math.round(ax), y: Math.round(ay) })
+    leaves.push({ name: String(l.name), container: String(container), x: Math.round(ax * 10) / 10, y: Math.round(ay * 10) / 10 })
   })
 }
 doc.pages[0].layers.forEach(function (top) { walk([top], 0, 0, 'page') })
 console.log(JSON.stringify(leaves))
+JS
+
+# A layer that already carries a rotation before being projected. Every other fixture starts
+# at 0°, so nothing else checks that an existing rotation composes with the projection
+# rather than being discarded or applied twice.
+cat > "$TMP/prerotated.body.js" <<'JS'
+var doc = newTestDocument()
+var rect = new sketch.ShapePath({
+  parent: doc.pages[0],
+  frame: { x: 0, y: 0, width: 100, height: 50 },
+  shapeType: sketch.ShapePath.ShapeType.Rectangle,
+})
+rect.sketchObject.setRotation(20)
+doc.selectedLayers.clear()
+rect.selected = true
+confirmFrontmost(doc)
+JS
+
+# A symbol instance has no path geometry, like an image, but reaches that branch by a
+# different route — it is a reference to a master rather than a raster layer.
+cat > "$TMP/symbol.body.js" <<'JS'
+var doc = newTestDocument()
+var page = doc.pages[0]
+var source = new sketch.Artboard({ parent: page, name: 'Source', frame: { x: 0, y: 0, width: 80, height: 40 } })
+new sketch.ShapePath({ parent: source, frame: { x: 0, y: 0, width: 80, height: 40 } })
+var master = sketch.SymbolMaster.fromArtboard(source)
+var instance = master.createNewInstance()
+instance.parent = page
+instance.frame = { x: 200, y: 0, width: 80, height: 40 }
+var rect = new sketch.ShapePath({
+  parent: page, name: 'plainRect',
+  frame: { x: 400, y: 0, width: 100, height: 50 },
+  shapeType: sketch.ShapePath.ShapeType.Rectangle,
+})
+doc.selectedLayers.clear()
+instance.selected = true
+rect.selected = true
+confirmFrontmost(doc)
+JS
+
+# Flattening is asked for geometry only, so appearance must come through untouched. Nothing
+# else in the suite looks at style — a flatten that silently dropped gradients or effects
+# would still pass every geometric check.
+cat > "$TMP/styled.body.js" <<'JS'
+var doc = newTestDocument()
+var rect = new sketch.ShapePath({
+  parent: doc.pages[0], name: 'styled',
+  frame: { x: 0, y: 0, width: 100, height: 50 },
+  shapeType: sketch.ShapePath.ShapeType.Rectangle,
+  style: {
+    fills: [{ fillType: 'Gradient', gradient: { gradientType: 'Linear',
+      stops: [{ position: 0, color: '#ff0000ff' }, { position: 1, color: '#0000ffff' }] } }],
+    borders: [{ color: '#00ff00ff', thickness: 3 }],
+    shadows: [{ color: '#000000aa', x: 4, y: 4, blur: 6, spread: 1 }],
+  },
+})
+doc.selectedLayers.clear()
+rect.selected = true
+confirmFrontmost(doc)
+JS
+
+cat > "$TMP/style-state.body.js" <<'JS'
+var doc = sketch.getSelectedDocument()
+var l = doc.pages[0].layers.filter(function (x) { return x.style && x.style.fills.length })[0]
+if (!l) { console.log(JSON.stringify({ error: 'no styled layer' })) } else {
+  var s = l.style
+  console.log(JSON.stringify({
+    fillType: s.fills[0].fillType,
+    stops: s.fills[0].gradient ? s.fills[0].gradient.stops.map(function (x) { return x.color }).join(',') : '',
+    borders: s.borders.length,
+    shadows: s.shadows.length,
+  }))
+}
+JS
+
+# A layer pinned to a fixed width. The pipeline resizes a group's frame to apply the
+# non-proportional scale, so a child that refuses to resize with its parent could come out
+# unsheared. It does not, because flattening replaces the layer before the stretch — but
+# nothing guarded that, and it depends on the order of two steps.
+cat > "$TMP/constrained.body.js" <<'JS'
+var doc = newTestDocument()
+var rect = new sketch.ShapePath({
+  parent: doc.pages[0], name: 'fixedWidth',
+  frame: { x: 0, y: 0, width: 100, height: 50 },
+  shapeType: sketch.ShapePath.ShapeType.Rectangle,
+})
+rect.sketchObject.setResizingConstraint(61)   // 63 = fully flexible; clearing bit 2 pins width
+doc.selectedLayers.clear()
+rect.selected = true
+confirmFrontmost(doc)
 JS
 
 cat > "$TMP/empty.body.js" <<'JS'
@@ -290,9 +380,13 @@ const mul = (A, B) => [
 const apply = (M, p) => [M[0] * p[0] + M[2] * p[1], M[1] * p[0] + M[3] * p[1]]
 
 const [face, path] = [process.argv[2], process.argv[3]]
+// Rotation the source layer already carried before being projected, if any. It composes
+// first, so the projection is applied to the already-rotated shape.
+const preRotation = Number(process.argv[4] || 0)
 const f = FACES[face]
 let M = mul(S(f.scaleX, f.scaleY), R(f.rotation))
 if (f.finalRotation !== 0) M = mul(R(f.finalRotation), M)
+if (preRotation !== 0) M = mul(M, R(preRotation))
 
 const source = [[0, 0], [100, 0], [100, 50], [0, 50]].map(p => apply(M, p))
 const nums = path.match(/-?\d+(\.\d+)?([eE][-+]?\d+)?/g).map(Number)
@@ -340,6 +434,28 @@ for face in top left front; do
            [ "$result" = "OK" ] && ok "$face" || bad "$face: $result" ;;
   esac
 done
+
+info "Already-rotated layer — the existing rotation must compose with the projection"
+setup "$(fixture "$TMP/prerotated.body.js")"
+err="$(runcmd create-top)"
+if [ -n "$err" ]; then
+  bad "prerotated: plugin reported: $err"
+else
+  path="$(runscript "$(fixture "$TMP/dump.body.js")" | node -e '
+    let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+      const shape = JSON.parse(s.trim()).find(l => l.path);
+      if (!shape) { console.log(""); return }
+      if (shape.rotation !== 0) { console.log("ROT:" + shape.rotation); return }
+      console.log(shape.path);
+    })')"
+  case "$path" in
+    "")    bad "prerotated: no path geometry in result" ;;
+    ROT:*) bad "prerotated: rotation not baked (${path#ROT:} deg)" ;;
+    *)     result="$(node "$TMP/check.js" top "$path" 20)"
+           [ "$result" = "OK" ] && ok "prerotated: 20° source composes with the top projection" \
+                                || bad "prerotated: $result" ;;
+  esac
+fi
 
 info "Composite — nested groups, a bezier oval and a text layer"
 setup "$(fixture "$TMP/composite.body.js")"
@@ -426,6 +542,27 @@ assert_placement() {
                            || bad "$label: layers were stacked at identical coordinates"
 }
 
+# Layers sharing an artboard are sheared as one composition, so the offset between them must
+# itself be transformed by the projection. If each were sheared about its own bounding box
+# the offset would come back unchanged.
+assert_offset() {
+  local label="$1" a="$2" b="$3" ex="$4" ey="$5"
+  local dx dy
+  read -r dx dy <<<"$(runscript "$(fixture "$TMP/placement.body.js")" | node -e '
+    let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+      const ls = JSON.parse(s.trim());
+      const A = ls.find(l => l.name === process.argv[1]);
+      const B = ls.find(l => l.name === process.argv[2]);
+      if (!A || !B) { console.log("nan nan"); return }
+      console.log((B.x - A.x).toFixed(2), (B.y - A.y).toFixed(2));
+    })' "$a" "$b")"
+  local near
+  near="$(awk -v dx="$dx" -v dy="$dy" -v ex="$ex" -v ey="$ey" \
+    'BEGIN { d = (dx-ex)*(dx-ex) + (dy-ey)*(dy-ey); print (d < 0.25) ? "yes" : "no" }')"
+  [ "$near" = "yes" ] && ok "$label: $b sits at ($dx, $dy) from $a — the projected offset" \
+                      || bad "$label: offset ($dx, $dy), expected ($ex, $ey)"
+}
+
 info "Two artboards — a layer selected in each must not leave its artboard"
 setup "$(fixture "$TMP/two-artboards.body.js")"
 err="$(runcmd create-left)"
@@ -436,13 +573,78 @@ info "Two groups in one artboard — layers must not be pulled into one group"
 setup "$(fixture "$TMP/two-groups.body.js")"
 err="$(runcmd create-top)"
 if [ -n "$err" ]; then bad "two-groups: plugin reported: $err"
-else assert_placement "two-groups" "r1 in G1; r2 in G2"; fi
+else
+  assert_placement "two-groups" "r1 in G1; r2 in G2"
+  # r1 and r2 start 180pt apart on one artboard. Sheared as a single composition that
+  # offset becomes S(1,tan30)·R(45)·(180,0) = (127.28, -73.49); sheared independently it
+  # would still read (180, 0).
+  assert_offset "two-groups" r1 r2 127.28 -73.49
+fi
 
 info "Unprojectable layers — an image alongside a shape"
 setup "$(fixture "$TMP/image.body.js")"
 err="$(runcmd create-front)"
 [ -z "$err" ] && ok "image: completed without error (shape projected, image reported to the user)" \
               || bad "image: plugin reported: $err"
+
+info "Symbol instance — no path geometry, reached by a different route than an image"
+setup "$(fixture "$TMP/symbol.body.js")"
+err="$(runcmd create-front)"
+if [ -n "$err" ]; then
+  bad "symbol: plugin reported: $err"
+else
+  read -r shapes instances <<<"$(runscript "$(fixture "$TMP/dump.body.js")" | node -e '
+    let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+      let shapes = 0, instances = 0;
+      (function walk(ns) { ns.forEach(n => {
+        if (n.type === "SymbolInstance") instances++;
+        if (n.path && n.rotation === 0) shapes++;
+        if (n.layers) walk(n.layers);
+      })})(JSON.parse(s.trim()));
+      console.log(shapes, instances);
+    })')"
+  [ "${shapes:-0}" -ge 1 ]    && ok "symbol: the shape beside it still projected ($shapes baked paths)" \
+                              || bad "symbol: no shape was projected"
+  [ "${instances:-0}" -ge 1 ] && ok "symbol: the instance survived instead of being destroyed" \
+                              || bad "symbol: the symbol instance disappeared"
+fi
+
+info "Appearance — flattening must not disturb fills, borders or effects"
+setup "$(fixture "$TMP/styled.body.js")"
+err="$(runcmd create-left)"
+if [ -n "$err" ]; then
+  bad "styled: plugin reported: $err"
+else
+  read -r fill stops borders shadows <<<"$(runscript "$(fixture "$TMP/style-state.body.js")" | node -e '
+    let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+      const o = JSON.parse(s.trim());
+      console.log(o.fillType || "-", o.stops || "-", o.borders, o.shadows);
+    })')"
+  [ "$fill" = "Gradient" ] && ok "styled: gradient fill survived" || bad "styled: fill became '$fill'"
+  [ "$stops" = "#ff0000ff,#0000ffff" ] && ok "styled: both gradient stops intact" \
+                                       || bad "styled: gradient stops are '$stops'"
+  [ "${borders:-0}" -eq 1 ] && ok "styled: border survived" || bad "styled: ${borders:-0} borders"
+  [ "${shadows:-0}" -eq 1 ] && ok "styled: shadow survived" || bad "styled: ${shadows:-0} shadows"
+fi
+
+info "Pinned-width layer — a resizing constraint must not distort the shear"
+setup "$(fixture "$TMP/constrained.body.js")"
+err="$(runcmd create-top)"
+if [ -n "$err" ]; then
+  bad "constrained: plugin reported: $err"
+else
+  path="$(runscript "$(fixture "$TMP/dump.body.js")" | node -e '
+    let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+      const shape = JSON.parse(s.trim()).find(l => l.path);
+      console.log(shape ? shape.path : "");
+    })')"
+  if [ -z "$path" ]; then bad "constrained: no path geometry in result"
+  else
+    result="$(node "$TMP/check.js" top "$path")"
+    [ "$result" = "OK" ] && ok "constrained: geometry matches the unconstrained projection" \
+                         || bad "constrained: $result"
+  fi
+fi
 
 info "Empty selection"
 setup "$(fixture "$TMP/empty.body.js")"
