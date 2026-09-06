@@ -28,6 +28,14 @@ The plugin can generate 3 types of isometric projections from your source layers
 
 Select one or more layers, then choose **Plugins → Isometry** and pick a projection.
 
+Layers in different groups or artboards are projected separately, in place. Sketch's
+grouping doesn't remap frames between coordinate spaces, so transforming a mixed selection
+as one unit would both pull layers out of their container and pile them all on the same
+spot. Each container's layers are therefore projected on their own; the trade-off is that
+layers in *different* containers are sheared about their own bounding boxes, so their
+offsets relative to each other change. Select within a single group or artboard to shear
+layers as one composition.
+
 Note that projecting an artboard, or anything inside one, resizes that artboard. A
 projection is always larger than the artwork it came from — an 800×604 artboard's contents
 become 566×820 — and artboards clip whatever sticks out, so the artboard is resized to fit
@@ -59,8 +67,9 @@ npm test             # end-to-end verification against a real Sketch install
 document, runs the plugin's commands against it, reads the resulting path geometry back
 out, and compares it to the isometric matrix `R(θ₂)·S(sx,sy)·R(θ₁)`. It covers the three
 faces on a rectangle, nested groups with a bezier oval and a text layer, a projection
-inside a tight artboard, a projection of an artboard selected directly, an image that
-cannot be projected, and an empty selection.
+inside a tight artboard, a projection of an artboard selected directly, selections spanning
+two artboards and two sibling groups, an image that cannot be projected, and an empty
+selection.
 
 Your own open documents are left alone: each fixture creates its own document, tagged by
 naming its page `ISOMETRY-TEST`, and only tagged documents are ever closed. Each fixture

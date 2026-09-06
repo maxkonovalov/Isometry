@@ -166,6 +166,53 @@ board.selected = true
 confirmFrontmost(doc)
 JS
 
+# Two artboards, one layer selected in each. Grouping them together would carry a layer out
+# of its artboard, and — because Sketch's grouping does not remap frames between coordinate
+# spaces — stack both at the same local coordinates.
+cat > "$TMP/two-artboards.body.js" <<'JS'
+var doc = newTestDocument()
+var a = new sketch.Artboard({ parent: doc.pages[0], name: 'A', frame: { x: 0, y: 0, width: 200, height: 200 } })
+var b = new sketch.Artboard({ parent: doc.pages[0], name: 'B', frame: { x: 400, y: 0, width: 200, height: 200 } })
+var ra = new sketch.ShapePath({ parent: a, name: 'inA', frame: { x: 20, y: 20, width: 100, height: 50 } })
+var rb = new sketch.ShapePath({ parent: b, name: 'inB', frame: { x: 20, y: 20, width: 100, height: 50 } })
+doc.selectedLayers.clear()
+ra.selected = true
+rb.selected = true
+confirmFrontmost(doc)
+JS
+
+# Two sibling groups inside one artboard, one layer selected from each. Same stacking
+# hazard, without crossing an artboard boundary.
+cat > "$TMP/two-groups.body.js" <<'JS'
+var doc = newTestDocument()
+var ab = new sketch.Artboard({ parent: doc.pages[0], name: 'A', frame: { x: 0, y: 0, width: 400, height: 400 } })
+var r1 = new sketch.ShapePath({ name: 'r1', frame: { x: 20, y: 20, width: 100, height: 50 } })
+var r2 = new sketch.ShapePath({ name: 'r2', frame: { x: 200, y: 20, width: 100, height: 50 } })
+var g1 = new sketch.Group({ parent: ab, name: 'G1', layers: [r1] }); g1.adjustToFit()
+var g2 = new sketch.Group({ parent: ab, name: 'G2', layers: [r2] }); g2.adjustToFit()
+doc.selectedLayers.clear()
+r1.selected = true
+r2.selected = true
+confirmFrontmost(doc)
+JS
+
+# Reports every leaf as "name@absX,absY" so a test can assert both that nothing moved
+# container and that no two layers ended up on the same spot.
+cat > "$TMP/placement.body.js" <<'JS'
+var doc = sketch.getSelectedDocument()
+var leaves = []
+function walk(layers, ox, oy, container) {
+  layers.forEach(function (l) {
+    var ax = ox + l.frame.x, ay = oy + l.frame.y
+    if (l.layers && l.layers.length) { walk(l.layers, ax, ay, l.name); return }
+    if (l.type === 'Artboard' || l.type === 'Group') return   // empty container, not a leaf
+    leaves.push({ name: String(l.name), container: String(container), x: Math.round(ax), y: Math.round(ay) })
+  })
+}
+doc.pages[0].layers.forEach(function (top) { walk([top], 0, 0, 'page') })
+console.log(JSON.stringify(leaves))
+JS
+
 cat > "$TMP/empty.body.js" <<'JS'
 var doc = newTestDocument()
 doc.selectedLayers.clear()
@@ -355,6 +402,41 @@ else
   [ "$clipped" = "false" ] && ok "artboard-selected: resized 100x50 -> ${w}x${h}, content not clipped" \
                            || bad "artboard-selected: content clipped (board ${w}x${h})"
 fi
+
+# Asserts each named layer is still in its expected container, and that no two leaves share
+# a position (which is what grouping across parents does to them).
+assert_placement() {
+  local label="$1" expected="$2"
+  local actual
+  actual="$(runscript "$(fixture "$TMP/placement.body.js")" | node -e '
+    let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+      const ls = JSON.parse(s.trim());
+      const where = ls.map(l => l.name + " in " + l.container).sort().join("; ");
+      const spots = ls.map(l => l.x + "," + l.y);
+      const stacked = new Set(spots).size !== spots.length;
+      console.log(JSON.stringify({ where, stacked, n: ls.length }));
+    })')"
+  local where stacked
+  where="$(printf '%s' "$actual" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).where))')"
+  stacked="$(printf '%s' "$actual" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).stacked))')"
+
+  [ "$where" = "$expected" ] && ok "$label: layers stayed put — $where" \
+                             || bad "$label: expected [$expected], got [$where]"
+  [ "$stacked" = "false" ] && ok "$label: no two layers landed on the same spot" \
+                           || bad "$label: layers were stacked at identical coordinates"
+}
+
+info "Two artboards — a layer selected in each must not leave its artboard"
+setup "$(fixture "$TMP/two-artboards.body.js")"
+err="$(runcmd create-left)"
+if [ -n "$err" ]; then bad "two-artboards: plugin reported: $err"
+else assert_placement "two-artboards" "inA in A; inB in B"; fi
+
+info "Two groups in one artboard — layers must not be pulled into one group"
+setup "$(fixture "$TMP/two-groups.body.js")"
+err="$(runcmd create-top)"
+if [ -n "$err" ]; then bad "two-groups: plugin reported: $err"
+else assert_placement "two-groups" "r1 in G1; r2 in G2"; fi
 
 info "Unprojectable layers — an image alongside a shape"
 setup "$(fixture "$TMP/image.body.js")"

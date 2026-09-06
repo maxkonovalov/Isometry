@@ -81,42 +81,34 @@ export function project(face) {
   const flattener = flattenerClass.alloc().init()
   const scene = document.sketchObject.documentData()
 
-  // Captured before grouping, because the layers are about to be moved into the
-  // scaffolding group and will report that group as their parent instead.
-  const parent = layers[0].parent
+  // Transforming layers as a unit means grouping them, and Sketch's grouping keeps each
+  // layer's frame as-is rather than remapping it into the new group's coordinate space. So
+  // grouping layers that came from different containers both moves them out of their
+  // container and stacks them at the same coordinates. Each container's layers are
+  // projected separately, in place, instead.
+  const batches = byParent(layers)
 
   let skipped = 0
   let fittedArtboards = 0
 
   withUndoGrouping(document, `Create ${face} isometric projection`, () => {
-    // The group is scaffolding: it gives the whole selection a single frame to
-    // rotate and stretch, and is dissolved again before returning.
-    const group = new sketch.Group({ parent, layers })
-    group.adjustToFit()
-    const native = group.sketchObject
-
-    rotate(native, projection.rotation)
-    skipped = bakeTransforms(native, flattener, scene)
-
-    stretch(native, projection.scaleX, projection.scaleY)
-
-    if (projection.finalRotation !== 0) {
-      rotate(native, projection.finalRotation)
-      bakeTransforms(native, flattener, scene)
-    }
-
-    const projected = childrenOf(native)
     selection.clear()
-    projected.forEach(layer => layer.select_byExtendingSelection(true, true))
-    native.ungroup()
-
-    fittedArtboards = fitArtboards(projected, parent)
+    batches.forEach(batch => {
+      const outcome = projectTogether(batch, projection, flattener, scene)
+      skipped += outcome.skipped
+      fittedArtboards += outcome.fittedArtboards
+    })
   })
 
   const notes = []
   if (skipped > 0) {
     notes.push(
       `${skipped} layer${skipped === 1 ? '' : 's'} had no path geometry and could not be projected.`
+    )
+  }
+  if (batches.length > 1) {
+    notes.push(
+      'Selected layers were in different groups or artboards, so each set was projected separately, in place.'
     )
   }
   if (fittedArtboards === 1) {
@@ -127,6 +119,70 @@ export function project(face) {
   if (notes.length > 0) {
     sketch.UI.message(notes.join(' '))
   }
+}
+
+/**
+ * Projects `layers` as one composition: they are grouped so the transform applies to all of
+ * them at once, which is what preserves their positions relative to each other, and the
+ * group is dissolved again before returning. The resulting layers are added to the
+ * selection.
+ *
+ * Every layer must already share a parent — see `byParent`. Grouping layers that do not is
+ * what stacks them, so this deliberately never re-parents anything.
+ *
+ * Returns how many layers could not be projected and how many artboards had to be resized.
+ */
+function projectTogether(layers, projection, flattener, scene) {
+  const parent = layers[0].parent
+
+  // The group is scaffolding: it gives the whole batch a single frame to rotate and
+  // stretch, and is dissolved again below.
+  const group = new sketch.Group({ parent, layers })
+  group.adjustToFit()
+  const native = group.sketchObject
+
+  rotate(native, projection.rotation)
+  const skipped = bakeTransforms(native, flattener, scene)
+
+  stretch(native, projection.scaleX, projection.scaleY)
+
+  if (projection.finalRotation !== 0) {
+    rotate(native, projection.finalRotation)
+    bakeTransforms(native, flattener, scene)
+  }
+
+  const projected = childrenOf(native)
+  projected.forEach(layer => layer.select_byExtendingSelection(true, true))
+  native.ungroup()
+
+  return { skipped, fittedArtboards: fitArtboards(projected, parent) }
+}
+
+/**
+ * Splits `layers` into batches that already share a parent, preserving order.
+ *
+ * A batch is the largest set that can safely be grouped: Sketch's grouping does not remap
+ * frames between coordinate spaces, so grouping layers from two different parents places
+ * both at the same local coordinates — they end up stacked, and on top of that they leave
+ * the container they belonged to. Batching by parent removes the possibility.
+ *
+ * The cost is that layers from different containers are sheared about their own bounding
+ * boxes rather than a shared one, so their offsets relative to each other change. That is a
+ * far better outcome than being silently piled on the same spot.
+ */
+function byParent(layers) {
+  const batches = []
+  const positions = {}
+  layers.forEach(layer => {
+    const parent = layer.parent
+    const key = parent ? String(parent.id) : ''
+    if (positions[key] === undefined) {
+      positions[key] = batches.length
+      batches.push([])
+    }
+    batches[positions[key]].push(layer)
+  })
+  return batches
 }
 
 /**
